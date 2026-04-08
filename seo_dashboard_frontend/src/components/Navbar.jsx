@@ -3,10 +3,13 @@ import { Link, useNavigate } from "react-router-dom";
 function Navbar() {
   const navigate = useNavigate();
   const token = localStorage.getItem("access");
+  const userStr = localStorage.getItem("user");
+  const user = userStr ? JSON.parse(userStr) : null;
 
   const handleLogout = () => {
     localStorage.removeItem("access");
     localStorage.removeItem("refresh");
+    localStorage.removeItem("user");
     navigate("/");
   };
 
@@ -89,6 +92,11 @@ function Navbar() {
           </>
         ) : (
           <>
+            {user?.is_superuser && (
+              <Link to="/admin/users" style={styles.link}>
+                Admin
+              </Link>
+            )}
             <Link to="/dashboard" style={styles.link}>
               Dashboard
             </Link>

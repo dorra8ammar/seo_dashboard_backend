@@ -25,8 +25,37 @@ class Analysis(models.Model):
 
 
 class Recommendation(models.Model):
-    analysis = models.ForeignKey(Analysis, on_delete=models.CASCADE)
-    contenu = models.TextField()
+    """Modele pour stocker les recommandations SEO generees par l'IA."""
+
+    PRIORITY_CHOICES = [
+        (1, "Haute"),
+        (2, "Moyenne"),
+        (3, "Basse"),
+    ]
+
+    TYPE_CHOICES = [
+        ("ctr", "Taux de clic"),
+        ("position", "Position Google"),
+        ("traffic", "Trafic"),
+        ("bounce", "Taux de rebond"),
+        ("seo", "SEO general"),
+    ]
+
+    website = models.ForeignKey(
+        Website,
+        on_delete=models.CASCADE,
+        related_name="recommendations",
+    )
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    action = models.CharField(max_length=255, blank=True, null=True)
+    recommendation_type = models.CharField(max_length=50, choices=TYPE_CHOICES)
+    priority = models.IntegerField(choices=PRIORITY_CHOICES, default=2)
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["priority", "-created_at"]
 
     def __str__(self):
-        return "Recommendation"
+        return f"{self.title} - {self.website.nom_site}"

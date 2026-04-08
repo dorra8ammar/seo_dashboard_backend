@@ -8,26 +8,11 @@ function Login() {
     username: "",
     password: "",
   });
+  const [googleError, setGoogleError] = useState("");
 
   const googleBtnRef = useRef(null);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!window.google || !googleBtnRef.current) return;
-
-    window.google.accounts.id.initialize({
-      client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-      callback: handleGoogleResponse,
-    });
-
-    window.google.accounts.id.renderButton(googleBtnRef.current, {
-      theme: "outline",
-      size: "large",
-      width: 320,
-      text: "continue_with",
-      shape: "rectangular",
-    });
-  }, []);
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
   const handleGoogleResponse = async (response) => {
     try {
@@ -37,8 +22,9 @@ function Login() {
 
       localStorage.setItem("access", res.data.access);
       localStorage.setItem("refresh", res.data.refresh);
+      localStorage.setItem("user", JSON.stringify(res.data.user));
 
-      alert("Connexion Google réussie");
+      alert("Connexion Google reussie");
       navigate("/dashboard");
     } catch (error) {
       console.error(error);
@@ -49,6 +35,71 @@ function Login() {
       );
     }
   };
+
+  useEffect(() => {
+    if (!googleClientId) {
+      setGoogleError("Configuration Google manquante.");
+      return;
+    }
+
+    let cancelled = false;
+
+    const renderGoogleButton = () => {
+      if (cancelled || !window.google || !googleBtnRef.current) {
+        return false;
+      }
+
+      googleBtnRef.current.innerHTML = "";
+
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: handleGoogleResponse,
+      });
+
+      window.google.accounts.id.renderButton(googleBtnRef.current, {
+        theme: "outline",
+        size: "large",
+        width: 320,
+        text: "continue_with",
+        shape: "rectangular",
+      });
+
+      setGoogleError("");
+      return true;
+    };
+
+    if (renderGoogleButton()) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const existingScript = document.querySelector(
+      'script[src="https://accounts.google.com/gsi/client"]'
+    );
+
+    const handleScriptLoad = () => {
+      if (!renderGoogleButton()) {
+        setGoogleError("Impossible de charger Google Sign-In.");
+      }
+    };
+
+    if (existingScript) {
+      existingScript.addEventListener("load", handleScriptLoad);
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      if (!renderGoogleButton()) {
+        setGoogleError("Impossible de charger Google Sign-In.");
+      }
+    }, 1500);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+      existingScript?.removeEventListener("load", handleScriptLoad);
+    };
+  }, [googleClientId]);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -62,6 +113,7 @@ function Login() {
 
       localStorage.setItem("access", response.data.access);
       localStorage.setItem("refresh", response.data.refresh);
+      localStorage.setItem("user", JSON.stringify(response.data.user));
 
       navigate("/dashboard");
     } catch (error) {
@@ -77,13 +129,13 @@ function Login() {
   return (
     <div style={styles.page}>
       <div style={styles.wrapper}>
-         <div style={styles.right}>
+        <div style={styles.right}>
           <img src={loginImg} alt="SEOmind login visual" style={styles.image} />
         </div>
         <div style={styles.left}>
           <div style={styles.formBox}>
             <h2 style={styles.title}>Connexion</h2>
-            <p style={styles.subtitle}>Accède à ton dashboard SEOmind.</p>
+            <p style={styles.subtitle}>Accede a ton dashboard SEOmind.</p>
 
             <form onSubmit={handleSubmit}>
               <input
@@ -115,9 +167,10 @@ function Login() {
               ref={googleBtnRef}
               style={{ display: "flex", justifyContent: "center" }}
             />
+            {googleError && <p style={styles.googleError}>{googleError}</p>}
 
             <p style={styles.linkText}>
-              <Link to="/forgot-password">Mot de passe oublié ?</Link>
+              <Link to="/forgot-password">Mot de passe oublie ?</Link>
             </p>
 
             <p style={styles.linkText}>
@@ -125,8 +178,6 @@ function Login() {
             </p>
           </div>
         </div>
-
-       
       </div>
     </div>
   );
@@ -166,7 +217,7 @@ const styles = {
     maxWidth: "380px",
   },
   right: {
-    background: "linear-gradient( #ffffff)",
+    background: "linear-gradient(#ffffff)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -219,6 +270,12 @@ const styles = {
   },
   linkText: {
     marginTop: "16px",
+    textAlign: "center",
+  },
+  googleError: {
+    marginTop: "12px",
+    color: "#b91c1c",
+    fontSize: "14px",
     textAlign: "center",
   },
 };

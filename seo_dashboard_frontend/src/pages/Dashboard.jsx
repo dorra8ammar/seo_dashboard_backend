@@ -10,6 +10,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import Recommendations from "../components/Recommendations";
 import { theme } from "../styles/theme";
 
 function Dashboard() {
@@ -18,6 +19,9 @@ function Dashboard() {
   const [sites, setSites] = useState([]);
   const [properties, setProperties] = useState([]);
   const [gaData, setGaData] = useState([]);
+  const [seoData, setSeoData] = useState([]);
+  const [loadingSeo, setLoadingSeo] = useState(false);
+  const [selectedWebsiteId, setSelectedWebsiteId] = useState(null);
   const [selectedPropertyId, setSelectedPropertyId] = useState("");
   const [selectedPropertyName, setSelectedPropertyName] = useState("");
 
@@ -56,28 +60,55 @@ function Dashboard() {
       console.error(error);
       alert(
         error.response?.data?.error ||
-          "Impossible de récupérer les propriétés Google Analytics"
+          "Impossible de recuperer les proprietes Google Analytics"
       );
     }
   };
 
   const fetchGAData = async (propertyId) => {
     try {
+      const response = await api.get(`/google-analytics/data/${propertyId}/`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      setGaData(response.data);
+    } catch (error) {
+      console.error(error);
+      alert(error.response?.data?.error || "Erreur recuperation donnees GA");
+    }
+  };
+
+  const fetchSearchConsole = async (siteUrl) => {
+    if (!siteUrl) {
+      alert("URL du site manquante");
+      return;
+    }
+
+    setLoadingSeo(true);
+    try {
       const response = await api.get(
-        `/google-analytics/data/${propertyId}/`,
+        `/search-console/data/?site_url=${encodeURIComponent(siteUrl)}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         }
       );
-      setGaData(response.data);
+
+      setSeoData(response.data);
+
+      if (response.data.length === 0) {
+        console.log("Aucune donnee Search Console pour ce site");
+      }
     } catch (error) {
-      console.error(error);
+      console.error("Erreur Search Console:", error);
       alert(
-        error.response?.data?.error || "Erreur récupération données GA"
+        error.response?.data?.error ||
+          "Erreur lors de la recuperation des donnees SEO"
       );
     }
+    setLoadingSeo(false);
   };
 
   useEffect(() => {
@@ -103,7 +134,7 @@ function Dashboard() {
 
       if (!verifyResponse.data.match) {
         alert(
-          "La propriété Google Analytics choisie ne correspond pas à l’URL du site."
+          "La propriete Google Analytics choisie ne correspond pas a l'URL du site."
         );
         return;
       }
@@ -148,7 +179,7 @@ function Dashboard() {
       alert(
         error.response?.data?.detail ||
           error.response?.data?.error ||
-          "Erreur lors de la connexion à Google Analytics"
+          "Erreur lors de la connexion a Google Analytics"
       );
     }
   };
@@ -166,26 +197,66 @@ function Dashboard() {
     );
   };
 
+  const seoStyles = {
+    container: {
+      background: "#fff",
+      borderRadius: "16px",
+      padding: "20px",
+      marginTop: "20px",
+      boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
+    },
+    title: {
+      fontSize: "20px",
+      fontWeight: "bold",
+      marginBottom: "15px",
+    },
+    tableWrap: {
+      overflowX: "auto",
+    },
+    table: {
+      width: "100%",
+      borderCollapse: "collapse",
+      minWidth: "700px",
+    },
+    th: {
+      textAlign: "left",
+      padding: "12px",
+      background: "#f3f4f6",
+      fontWeight: "bold",
+    },
+    td: {
+      padding: "12px",
+      borderBottom: "1px solid #e5e7eb",
+    },
+    badge: {
+      background: "#e5e7eb",
+      padding: "4px 8px",
+      borderRadius: "12px",
+      fontSize: "12px",
+    },
+  };
+
   return (
     <div style={theme.page}>
       <div style={theme.container}>
         <div style={theme.dashboardCard}>
           <h2 style={{ marginBottom: "10px", fontWeight: "bold" }}>
-  Dashboard SEO<span style={{ color: "#6366f1" }}>mind</span>
-</h2>
+            Dashboard SEO<span style={{ color: "#6366f1" }}>mind</span>
+          </h2>
           <p style={{ color: "#6b7280" }}>
-            <p style={{ color: "#6b7280" }}>
-  Analyse intelligente de ton trafic web avec Google Analytics.
-</p>
+            Analyse intelligente de ton trafic web avec Google Analytics.
           </p>
 
           <div style={theme.rowButtons}>
-            <button style={theme.secondaryButton} onClick={handleGoogleAnalyticsConnect}>
-              🔗 Connecter Google Analytics
+            <button
+              style={theme.secondaryButton}
+              onClick={handleGoogleAnalyticsConnect}
+            >
+              Connecter Google Analytics
             </button>
 
             <button style={theme.secondaryButton} onClick={fetchProperties}>
-              📋 Charger propriétés GA
+              Charger proprietes GA
             </button>
           </div>
         </div>
@@ -215,7 +286,7 @@ function Dashboard() {
               value={selectedPropertyId}
               onChange={handlePropertyChange}
             >
-              <option value="">Choisir une propriété Google Analytics</option>
+              <option value="">Choisir une propriete Google Analytics</option>
               {properties.map((prop) => (
                 <option key={prop.property_id} value={prop.property_id}>
                   {prop.display_name} - {prop.property_id}
@@ -233,7 +304,7 @@ function Dashboard() {
           <h3 style={theme.sectionTitle}>Liste des sites</h3>
 
           {sites.length === 0 ? (
-            <p>Aucun site enregistré</p>
+            <p>Aucun site enregistre</p>
           ) : (
             <div>
               {sites.map((site) => (
@@ -241,15 +312,27 @@ function Dashboard() {
                   <strong>{site.nom_site}</strong> - {site.url}
                   <br />
                   <span style={{ color: "#6b7280" }}>
-                    Propriété GA : {site.property_name} ({site.property_id})
+                    Propriete GA : {site.property_name} ({site.property_id})
                   </span>
                   <br />
                   <br />
                   <button
                     style={theme.secondaryButton}
-                    onClick={() => fetchGAData(site.property_id)}
+                    onClick={() => {
+                      fetchGAData(site.property_id);
+                      setSelectedWebsiteId(site.id);
+                    }}
                   >
-                    📊 Voir stats de ce site
+                    Voir stats GA
+                  </button>
+                  <button
+                    style={{ ...theme.secondaryButton, marginLeft: "10px" }}
+                    onClick={() => {
+                      fetchSearchConsole(site.url);
+                      setSelectedWebsiteId(site.id);
+                    }}
+                  >
+                    Voir donnees SEO
                   </button>
                 </div>
               ))}
@@ -258,10 +341,10 @@ function Dashboard() {
         </div>
 
         <div style={theme.dashboardCard}>
-          <h3 style={theme.sectionTitle}>Graphique d’évolution du trafic</h3>
+          <h3 style={theme.sectionTitle}>Graphique d'evolution du trafic</h3>
 
           {formattedChartData.length === 0 ? (
-            <p>Aucune donnée à afficher</p>
+            <p>Aucune donnee a afficher</p>
           ) : (
             <div style={{ width: "100%", height: "420px" }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -279,6 +362,65 @@ function Dashboard() {
             </div>
           )}
         </div>
+
+        <div style={seoStyles.container}>
+          <h3 style={seoStyles.title}>Donnees SEO (Google Search Console)</h3>
+
+          {loadingSeo ? (
+            <p>Chargement des donnees SEO...</p>
+          ) : seoData.length === 0 ? (
+            <p style={{ color: "#6b7280" }}>
+              Aucune donnee SEO disponible pour ce site sur la periode
+              selectionnee. {!loadingSeo &&
+                " Verifiez que votre site est bien enregistre dans Google Search Console."}
+            </p>
+          ) : (
+            <div style={seoStyles.tableWrap}>
+              <table style={seoStyles.table}>
+                <thead>
+                  <tr>
+                    <th style={seoStyles.th}>Mot-cle</th>
+                    <th style={seoStyles.th}>Clics</th>
+                    <th style={seoStyles.th}>Impressions</th>
+                    <th style={seoStyles.th}>CTR</th>
+                    <th style={seoStyles.th}>Position</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {seoData.map((row, index) => (
+                    <tr key={index}>
+                      <td style={seoStyles.td}>
+                        <strong>{row.keyword}</strong>
+                      </td>
+                      <td style={seoStyles.td}>{row.clicks}</td>
+                      <td style={seoStyles.td}>{row.impressions}</td>
+                      <td style={seoStyles.td}>
+                        <span style={seoStyles.badge}>
+                          {(row.ctr * 100).toFixed(1)}%
+                        </span>
+                      </td>
+                      <td style={seoStyles.td}>
+                        <span
+                          style={{
+                            ...seoStyles.badge,
+                            background:
+                              row.position <= 5 ? "#d1fae5" : "#fef3c7",
+                          }}
+                        >
+                          {row.position.toFixed(1)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {selectedWebsiteId && (
+          <Recommendations websiteId={selectedWebsiteId} token={token} />
+        )}
       </div>
     </div>
   );
